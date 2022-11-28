@@ -11,6 +11,11 @@ from tqdm import tqdm
 from loguru import logger
 import wandb
 
+
+import r9.excepthook
+from r9.model import make_model
+
+
 parser = argparse.ArgumentParser(description='CIFAR-10')
 parser.add_argument('--name', default=Path(__file__).stem, type=str, help='job name')
 parser.add_argument('--download', action='store_true', default='try to download the dataset')
@@ -41,57 +46,6 @@ test_transform = T.Compose([
     T.ConvertImageDtype(torch.float),
     normalize,
 ])
-
-
-class ConvBlock2D(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
-        super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.GELU()
-
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        return x
-
-
-class ResBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1):
-        super().__init__()
-        self.conv1 = ConvBlock2D(in_channels, out_channels, stride=stride)
-        self.conv2 = ConvBlock2D(out_channels, out_channels)
-
-    def forward(self, x):
-        x = self.conv1(x)
-        return x + self.conv2(x)
-
-
-class GlobalPool(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        #return nn.functional.max_pool2d(x, kernel_size=x.size()[2:]).squeeze(-1).squeeze(-1)
-        return torch.amax(x, dim=(-2,-1))
-
-
-def make_model():
-    model = nn.Sequential(
-        ConvBlock2D(3, 64),
-        ConvBlock2D(64, 128),
-        nn.MaxPool2d(kernel_size=3, stride=2),
-        ResBlock(128, 128),
-        ConvBlock2D(128, 256),
-        nn.MaxPool2d(kernel_size=3, stride=2),
-        ConvBlock2D(256, 256),
-        nn.MaxPool2d(kernel_size=3, stride=2),
-        ResBlock(256, 256),
-        GlobalPool(),
-        nn.Linear(256, 10)
-    )
-    return model
 
 
 def train_one_epoch(model, criterion, optimizer, loader, *, epoch, scaler, scheduler):
